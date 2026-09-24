@@ -1,41 +1,40 @@
 # fastalloc
 
-single header library with multiple fast standard library compatible memory allocators
+Single header library with multiple fast standard library compatible memory allocators. Each allocator is templated to allow for tuning, including options for alignment, nothrow, page size and pinning. Just copy and paste a header, and you're good to go.
+
+For example, you can write a custom arena allocator that aligns elements to the cache line size and make use of Linux 2mb huge pages.
+
+```cpp
+template <typename T, std::uint64_t NumElements>
+using CustomArean =
+  fastalloc::Arena<T,
+                   NumElements,
+                   std::hardware_destructive_interference_size, // Alignment
+                   false, // Nothrow.
+                   fastalloc::ARENA_PAGE_SIZES::MB_2, // Linux Huge page
+                   true>; // Pinning
+
+```
 
 > [!note] Currently only works on Linux.
 
-- [x] standard library allocators
-  - [x] Allocator named requirement
-  - [x] std::allocator
-    - [x] rebind (in notes in std::allocator)
-  - [x] std::allocator_traits
-- [x] custom new/delete, new expression vs new call
-- [ ] arena allocator
-  - [ ] have a clearer purpose. how should copying data structures affect the allocator? idea: copying should not map more memory. uses the same memory, but becomes non-owning. i would like the arena to outlast the stack, i mean you could just allocate stack memory if that can't happen.so no stack alloc. maybe implement a stack-based allocator too. actually i want stack based, but maybe std::terminate or something if refcount > 1. pinned memory?
-  - [ ] initial impl, works with different stdlib data structures
-  - [ ] options for alignment, cache-aligned, huge pages, thread-safe (?, std::atomic)
+- [ ] standard library container templated tests
 - [ ] pool allocator
-  - [ ] impl using page table-like indexing with tzcount
-  - [ ] if tzcount not available, hackers delight impl
 - [ ] freelist
 - [ ] buddy
 - [ ] slab
 - [ ] segregated
 - [ ] tracking
 
-## notes
+## features
 
-In C++, an allocator is a templated class that allocates and deallocates for a specific type T (QUESTION: how to manage std::vector<T*> that point to derived classes from bases with virtual methods).
+- [x] Arena
 
-stateful vs stateless allocators?
+## Tests
 
-* Should have an `T *allocate(size_t n)` and `void deallocate(T *p, size_t n)`.
-* `using value_type = T`
-* if you change templates, you need to define a `struct rebind`
+To build tests install gtest from `libgtest-dev`. Then build with CMake.
 
-
-
-## links
+## Helpful links
 
 * https://thealexcons.github.io/articles/memory-allocators.html
 * https://www.gingerbill.org/article/2019/02/01/memory-allocation-strategies-001/

@@ -53,10 +53,8 @@ inline const u64 round_up_to_even_pages(const u64 capacity_needed,
   return (capacity_needed + size - 1) / size;
 }
 
-// TODO list:
-// tests!
 template <typename T,
-          u64 Capacity  = 128 * 1024 * 1024, // 128 MiB
+          u64 NumElements,
           u64 Alignment = alignof(T),
           bool NoThrow  = false,
           ARENA_PAGE_SIZES HugePages = ARENA_PAGE_SIZES::DEFAULT,
@@ -80,18 +78,28 @@ public:
   using is_always_equal = std::false_type;
 
   template <typename U>
-  struct rebind { using other = Arena<U, Capacity, Alignment>; };
+  struct rebind {
+    using other = Arena<U,
+                        NumElements,
+                        Alignment,
+                        NoThrow,
+                        HugePages,
+                        Pinned>;
+  };
 
   Arena() noexcept(NoThrow) :
-    header(nullptr) {
+    header(nullptr),
+    total_bytes_allocated(0) {
 
-    void *start_virtual_memory = (void *)os_alloc(Capacity * sizeof(T));
+    void *start_virtual_memory = (void *)os_alloc(total_bytes_allocated);
 
-    if constexpr (!NoThrow) {
-      if (start_virtual_memory == nullptr) throw std::bad_alloc();
-    } else {
-      if (start_virtual_memory == nullptr) return;
+    if (start_virtual_memory == nullptr) {
+      if constexpr (NoThrow) return;
+      else throw std::bad_alloc();
     }
+
+    total_bytes_allocated =
+      round_up_to_even_pages(NumElements * sizeof(T) + sizeof(ArenaHeader), HugePages);
 
     header = new (start_virtual_memory) ArenaHeader();
     header->ref_count = 1;
@@ -118,7 +126,7 @@ public:
   T *allocate(u64 num_objects) noexcept(NoThrow) {
     if (num_objects == 0) return nullptr;
 
-    if (header->offset_from_header >= Capacity) {
+    if (header->offset_from_header >= NumElements) { // TODO: fix, check all NumElements as well.
       if constexpr (NoThrow) return nullptr;
       else throw std::bad_alloc();
     }
@@ -138,7 +146,7 @@ public:
   void clear() { header->offset_from_header = header + sizeof(ArenaHeader); }
 
   size_type max_size() {
-    return Capacity - sizeof(ArenaHeader);
+    return NumElements - sizeof(ArenaHeader);
   }
 
   template <typename... Args>
@@ -156,17 +164,15 @@ public:
 
 private:
   void *os_alloc(u64 num_bytes) noexcept {
-    const u64 num_bytes_rounded_up =
-      round_up_to_even_pages(num_bytes, HugePages);
     void *buffer = mmap(nullptr,
-                        num_bytes_rounded_up,
+                        num_bytes,
                         PROT_READ | PROT_WRITE,
                         MAP_ANON | MAP_PRIVATE | (u32)HugePages,
                         0,
                         0);
 
     if constexpr (Pinned) {
-      mlock(buffer, num_bytes_rounded_up);
+      mlock(buffer, num_bytes);
     }
 
     if (buffer == MAP_FAILED) return nullptr;
@@ -192,7 +198,7 @@ private:
   void decrease_ref_count_and_free() {
     header->ref_count--;
     if (header->ref_count == 0) {
-      os_dealloc((void *)header, Capacity);
+      os_dealloc((void *)header, total_bytes_allocated);
     }
   }
 
@@ -202,6 +208,7 @@ private:
   };
 
   ArenaHeader *header;
+  u64 total_bytes_allocated;
 };
 
 #undef u64
