@@ -6,7 +6,7 @@ For example, you can write a custom arena allocator that aligns elements to the 
 
 ```cpp
 template <typename T, std::uint64_t NumElements>
-using CustomArean =
+using CustomArena =
   fastalloc::Arena<T,
                    NumElements,
                    std::hardware_destructive_interference_size, // Alignment
@@ -18,7 +18,10 @@ using CustomArean =
 
 > [!note] Currently only works on Linux.
 
-- [ ] standard library container templated tests
+- [ ] sbrk, does malloc just take up a bunch of space too, std::deque
+- [ ] std::deque tests
+- [ ] compare perf with std::deque
+
 - [ ] pool allocator
 - [ ] freelist
 - [ ] buddy
