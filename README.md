@@ -1,8 +1,8 @@
 # fastalloc
 
-Single header library with multiple fast standard library compatible memory allocators. Each allocator is templated to allow for tuning, including options for alignment, nothrow, page size and pinning. Just copy and paste a header, and you're good to go.
+Single header library with multiple fast standard library compatible memory allocators. Each allocator is templated to allow for tuning, including options for alignment, nothrow, page size and memory pinning. Just copy and paste a header, and you're good to go.
 
-For example, you can write a custom arena allocator that aligns elements to the cache line size and make use of Linux 2mb huge pages.
+For example, you can write a custom arena allocator that aligns elements to the cache line size and make use of Linux 2mb huge pages. Note that to use the huge pages feature, you need to reserve huge pages by writing how many you want to `/proc/sys/vm/nr_hugepages`.
 
 ```cpp
 template <typename T, std::uint64_t NumElements>

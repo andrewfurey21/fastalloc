@@ -5,15 +5,21 @@
 #include <system_error>
 #include <unistd.h>
 
+#include <iostream>
+
 namespace fastalloc {
 
 #define u64 unsigned long long
 #define u32 unsigned int
-#define i32 int
 #define u8  unsigned char
+#define i32 int
+
+// TODO list
+// 3. arena specific tests (clear, copy, destruct)
+// 4. add license and push.
 
 enum class ARENA_PAGE_SIZES : u32 {
-  DEFAULT = 0, // NOTE: should be 4096 on Linux by default.
+  DEFAULT = 0,
   KB_16   = MAP_HUGE_16KB  | MAP_HUGETLB,
   KB_64   = MAP_HUGE_64KB  | MAP_HUGETLB,
   KB_512  = MAP_HUGE_512KB | MAP_HUGETLB,
@@ -50,11 +56,11 @@ inline const u64 round_up_to_even_pages(const u64 capacity_needed,
     case (ARENA_PAGE_SIZES::GB_16):   size = 16 * KB * KB * KB; break;
   }
 
-  return (capacity_needed + size - 1) / size;
+  return size * ((capacity_needed + size - 1) / size);
 }
 
 template <typename T,
-          u64 NumElements,
+          u64 MaxNumElements,
           u64 Alignment = alignof(T),
           bool NoThrow  = false,
           ARENA_PAGE_SIZES HugePages = ARENA_PAGE_SIZES::DEFAULT,
@@ -80,7 +86,7 @@ public:
   template <typename U>
   struct rebind {
     using other = Arena<U,
-                        NumElements,
+                        MaxNumElements,
                         Alignment,
                         NoThrow,
                         HugePages,
@@ -91,30 +97,36 @@ public:
     header(nullptr),
     total_bytes_allocated(0) {
 
-    void *start_virtual_memory = (void *)os_alloc(total_bytes_allocated);
+    // const u64 size =
+    //   round_up_to_even_pages(MaxNumElements * sizeof(T) + sizeof(ArenaHeader), HugePages);
+    const u64 size =
+      round_up_to_even_pages(MaxNumElements * size_of_each_allocation() +
+                             sizeof(ArenaHeader), HugePages);
+
+    void *start_virtual_memory = (void *)os_alloc(size);
 
     if (start_virtual_memory == nullptr) {
       if constexpr (NoThrow) return;
       else throw std::bad_alloc();
     }
 
-    total_bytes_allocated =
-      round_up_to_even_pages(NumElements * sizeof(T) + sizeof(ArenaHeader), HugePages);
+    // Gets rounded up to an even number of pages. Needed for huge pages.
+    total_bytes_allocated = size;
 
     header = new (start_virtual_memory) ArenaHeader();
-    header->ref_count = 1;
-    header->offset_from_header = sizeof(ArenaHeader);
   }
 
-  Arena(const Arena& other) noexcept : header(other.header) {
-    header->ref_count++;
+  Arena(const Arena& other) noexcept :
+    header(other.header),
+    total_bytes_allocated(other.total_bytes_allocated) {
+    increase_ref_count();
   }
 
   Arena& operator=(const Arena& other) noexcept {
     if (this != &other) {
       this->decrease_ref_count_and_free();
       this->header = other.header;
-      this->header->ref_count++;
+      increase_ref_count();
     }
     return *this;
   }
@@ -124,15 +136,21 @@ public:
   }
 
   T *allocate(u64 num_objects) noexcept(NoThrow) {
+    if (header == nullptr) {
+      if constexpr (NoThrow) return nullptr;
+      else throw std::runtime_error("Arena::allocate(): trying to derefence an invalid arena (header is nulltr).");
+    }
     if (num_objects == 0) return nullptr;
 
-    if (header->offset_from_header >= NumElements) { // TODO: fix, check all NumElements as well.
+    const u64 new_allocation_size = num_objects * size_of_each_allocation();
+    if (header->objects_allocated + num_objects > MaxNumElements) {
       if constexpr (NoThrow) return nullptr;
       else throw std::bad_alloc();
     }
 
     u8 *allocation = ((u8 *)(header)) + header->offset_from_header;
     header->offset_from_header += size_of_each_allocation() * num_objects;
+    header->objects_allocated += num_objects;
     return (T *) allocation;
   }
 
@@ -144,10 +162,6 @@ public:
   void deallocate(T *p, u64 num_objects) {}
 
   void clear() { header->offset_from_header = header + sizeof(ArenaHeader); }
-
-  size_type max_size() {
-    return NumElements - sizeof(ArenaHeader);
-  }
 
   template <typename... Args>
   void construct(pointer p, Args... args) {
@@ -170,7 +184,6 @@ private:
                         MAP_ANON | MAP_PRIVATE | (u32)HugePages,
                         0,
                         0);
-
     if constexpr (Pinned) {
       mlock(buffer, num_bytes);
     }
@@ -192,19 +205,32 @@ private:
   }
 
   constexpr u64 size_of_each_allocation() {
-    return sizeof(T) + Alignment - (sizeof(T) % Alignment);
+    return Alignment * ((sizeof(T) + Alignment - 1) / Alignment);
+  }
+
+  void increase_ref_count() {
+    if (header != nullptr)
+      header->ref_count++;
   }
 
   void decrease_ref_count_and_free() {
-    header->ref_count--;
-    if (header->ref_count == 0) {
-      os_dealloc((void *)header, total_bytes_allocated);
+    if (header != nullptr) {
+      header->ref_count--;
+      if (header->ref_count == 0) {
+        os_dealloc((void *)header, total_bytes_allocated);
+      }
     }
   }
 
   struct alignas(Alignment) ArenaHeader {
+    ArenaHeader() {
+      ref_count = 1;
+      offset_from_header = sizeof(ArenaHeader);
+      objects_allocated = 0;
+    }
     u64 ref_count;
     u64 offset_from_header;
+    u64 objects_allocated;
   };
 
   ArenaHeader *header;
