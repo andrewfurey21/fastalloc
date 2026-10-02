@@ -33,7 +33,10 @@ namespace fastalloc {
 #define u8  unsigned char
 #define i32 int
 
-enum class ARENA_PAGE_SIZES : u32 {
+#ifndef __FAST_ALLOC_PAGE_SIZES
+#define __FAST_ALLOC_PAGE_SIZES
+
+enum class PAGE_SIZES : u32 {
   DEFAULT = 0,
   KB_16   = MAP_HUGE_16KB  | MAP_HUGETLB,
   KB_64   = MAP_HUGE_64KB  | MAP_HUGETLB,
@@ -51,34 +54,36 @@ enum class ARENA_PAGE_SIZES : u32 {
 };
 
 inline const u64 round_up_to_even_pages(const u64 capacity_needed,
-                                        const ARENA_PAGE_SIZES page_size) {
+                                        const PAGE_SIZES page_size) {
   constexpr u64 KB = 1024;
   u64 size = 0;
   switch (page_size) {
-    case (ARENA_PAGE_SIZES::DEFAULT): size = sysconf(_SC_PAGE_SIZE); break;
-    case (ARENA_PAGE_SIZES::KB_16):   size = 16 * KB; break;
-    case (ARENA_PAGE_SIZES::KB_64):   size = 64 * KB; break;
-    case (ARENA_PAGE_SIZES::KB_512):  size = 512 * KB; break;
-    case (ARENA_PAGE_SIZES::MB_1):    size = 1 * KB * KB; break;
-    case (ARENA_PAGE_SIZES::MB_2):    size = 2 * KB * KB; break;
-    case (ARENA_PAGE_SIZES::MB_8):    size = 8 * KB * KB; break;
-    case (ARENA_PAGE_SIZES::MB_16):   size = 16 * KB * KB; break;
-    case (ARENA_PAGE_SIZES::MB_32):   size = 32 * KB * KB; break;
-    case (ARENA_PAGE_SIZES::MB_256):  size = 256 * KB * KB; break;
-    case (ARENA_PAGE_SIZES::MB_512):  size = 512 * KB * KB; break;
-    case (ARENA_PAGE_SIZES::GB_1):    size = 1 * KB * KB * KB; break;
-    case (ARENA_PAGE_SIZES::GB_2):    size = 2 * KB * KB * KB; break;
-    case (ARENA_PAGE_SIZES::GB_16):   size = 16 * KB * KB * KB; break;
+    case (PAGE_SIZES::DEFAULT): size = sysconf(_SC_PAGE_SIZE); break;
+    case (PAGE_SIZES::KB_16):   size = 16 * KB; break;
+    case (PAGE_SIZES::KB_64):   size = 64 * KB; break;
+    case (PAGE_SIZES::KB_512):  size = 512 * KB; break;
+    case (PAGE_SIZES::MB_1):    size = 1 * KB * KB; break;
+    case (PAGE_SIZES::MB_2):    size = 2 * KB * KB; break;
+    case (PAGE_SIZES::MB_8):    size = 8 * KB * KB; break;
+    case (PAGE_SIZES::MB_16):   size = 16 * KB * KB; break;
+    case (PAGE_SIZES::MB_32):   size = 32 * KB * KB; break;
+    case (PAGE_SIZES::MB_256):  size = 256 * KB * KB; break;
+    case (PAGE_SIZES::MB_512):  size = 512 * KB * KB; break;
+    case (PAGE_SIZES::GB_1):    size = 1 * KB * KB * KB; break;
+    case (PAGE_SIZES::GB_2):    size = 2 * KB * KB * KB; break;
+    case (PAGE_SIZES::GB_16):   size = 16 * KB * KB * KB; break;
   }
 
   return size * ((capacity_needed + size - 1) / size);
 }
 
+#endif
+
 template <typename T,
           u64 MaxNumElements,
           u64 Alignment = alignof(T),
           bool NoThrow  = false,
-          ARENA_PAGE_SIZES HugePages = ARENA_PAGE_SIZES::DEFAULT,
+          PAGE_SIZES HugePages = PAGE_SIZES::DEFAULT,
           bool Pinned = false>
 class Arena {
   static_assert((Alignment >= 1 && Alignment & (Alignment - 1)) == 0,
@@ -126,7 +131,7 @@ public:
     // Gets rounded up to an even number of pages. Needed for huge pages.
     total_bytes_allocated = size;
 
-    header = new (start_virtual_memory) ArenaHeader();
+    header = new (start_virtual_memory) ArenaHeader;
   }
 
   Arena(const Arena& other) noexcept :

@@ -10,33 +10,14 @@
 
 #include <gtest/gtest.h>
 
-#include "../arena_allocator.hpp"
+#include "../include/arena_allocator.hpp"
+#include "../include/free_list_allocator.hpp"
 
 // Test config.
 using namespace std; // Easy to swap.
 constexpr int NUM_ELEMENTS = 32 * 1024 * 1024;
 
 #include <vector>
-#include <deque>
-
-/*
-
-deque
-
-string
-list
-forward_list
-map
-multimap
-set
-multiset
-unordered_map
-unordered_multimap
-unordered_set
-unordered_multiset
-
-*/
-
 
 struct DummyType {
   DummyType() : x{1}, y{2}, z{3} {}
@@ -69,23 +50,26 @@ public:
 
 using BasicArena =
   fastalloc::Arena<DummyType, NUM_ELEMENTS>;
-using HugePage2MBArena=
-  fastalloc::Arena<DummyType,
-                   NUM_ELEMENTS,
-                   alignof(DummyType),
-                   false,
-                   fastalloc::ARENA_PAGE_SIZES::MB_2>;
+// using HugePage2MBArena=
+//   fastalloc::Arena<DummyType,
+//                    NUM_ELEMENTS,
+//                    alignof(DummyType),
+//                    false,
+//                    fastalloc::ARENA_PAGE_SIZES::MB_2>;
 using PinnedArena=
   fastalloc::Arena<DummyType,
                    NUM_ELEMENTS,
                    alignof(DummyType),
                    false,
-                   fastalloc::ARENA_PAGE_SIZES::MB_2,
+                   fastalloc::ARENA_PAGE_SIZES::DEFAULT,
                    true>;
+using BasicPool =
+  fastalloc::FreeList<DummyType, NUM_ELEMENTS>;
 
 using AllocatorTypes = ::testing::Types<BasicArena,
-                                        HugePage2MBArena,
-                                        PinnedArena>;
+                                        // HugePage2MBArena,
+                                        PinnedArena,
+                                        BasicPool>;
 
 TYPED_TEST_SUITE(AllocatorTests, AllocatorTypes);
 

@@ -1,8 +1,9 @@
 # fastalloc
 
-Single header library with multiple fast standard library compatible memory allocators. Each allocator is templated to allow for tuning, including options for alignment, nothrow, page size and memory pinning. Just copy and paste a header, and you're good to go.
+Single header arena allocator. Includes an interface to allow for tuning, with options for alignment, nothrow, page size and memory pinning. Just copy and paste the header, and you're good to go.
 
-For example, you can write a custom arena allocator that aligns elements to the cache line size and make use of Linux 2mb huge pages. Note that to use the huge pages feature, you need to reserve huge pages by writing how many you want to `/proc/sys/vm/nr_hugepages`.
+For example, you can write a custom arena allocator that aligns elements to the cache line size and makes use of Linux 2mb huge pages.
+
 
 ```cpp
 template <typename T, std::uint64_t NumElements>
@@ -16,22 +17,9 @@ using CustomArena =
 
 ```
 
-> [!note] Currently only works on Linux.
+Note that to use the huge pages feature, you need to reserve huge pages by writing how many you want to `/proc/sys/vm/nr_hugepages`.
 
-- [ ] sbrk, does malloc just take up a bunch of space too, std::deque
-- [ ] std::deque tests
-- [ ] compare perf with std::deque
-
-- [ ] pool allocator
-- [ ] freelist
-- [ ] buddy
-- [ ] slab
-- [ ] segregated
-- [ ] tracking
-
-## features
-
-- [x] Arena
+> Currently only works on Linux.
 
 ## Tests
 
